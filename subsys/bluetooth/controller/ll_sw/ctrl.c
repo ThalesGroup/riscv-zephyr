@@ -2608,21 +2608,12 @@ isr_rx_conn_pkt_ctrl(struct radio_pdu_node_rx *radio_pdu_node_rx,
 					PDU_DATA_LLCTRL_TYPE_CONN_PARAM_REQ,
 					0x23);
 #if defined(CONFIG_BT_CTLR_PHY)
-#if defined(CONFIG_BT_CTLR_LE_ENC)
 			} else if (((conn->llcp_req != conn->llcp_ack) &&
 				    (conn->llcp_type != LLCP_ENCRYPTION)) ||
 				   (conn->llcp_phy.req != conn->llcp_phy.ack)) {
-#else /* !CONFIG_BT_CTLR_LE_ENC */
-			} else if ((conn->llcp_req != conn->llcp_ack) ||
-				   (conn->llcp_phy.req != conn->llcp_phy.ack)) {
-#endif /* !CONFIG_BT_CTLR_LE_ENC */
 #else /* !CONFIG_BT_CTLR_PHY */
-#if defined(CONFIG_BT_CTLR_LE_ENC)
 			} else if ((conn->llcp_req != conn->llcp_ack) &&
 				   (conn->llcp_type != LLCP_ENCRYPTION)) {
-#else /* !CONFIG_BT_CTLR_LE_ENC */
-			} else if (conn->llcp_req != conn->llcp_ack) {
-#endif /* !CONFIG_BT_CTLR_LE_ENC */
 #endif /* !CONFIG_BT_CTLR_PHY */
 				/* Different procedure collision */
 				nack = reject_ext_ind_send(_radio.conn_curr,
@@ -2941,29 +2932,17 @@ isr_rx_conn_pkt_ctrl(struct radio_pdu_node_rx *radio_pdu_node_rx,
 					PDU_DATA_LLCTRL_TYPE_PHY_REQ,
 					0x23);
 #if defined(CONFIG_BT_CTLR_CONN_PARAM_REQ)
-#if defined(CONFIG_BT_CTLR_LE_ENC)
 			} else if (((_radio.conn_curr->llcp_req !=
 				     _radio.conn_curr->llcp_ack) &&
 				    (_radio.conn_curr->llcp_type !=
 				     LLCP_ENCRYPTION)) ||
 				   (_radio.conn_curr->llcp_conn_param.req !=
 				    _radio.conn_curr->llcp_conn_param.ack)) {
-#else /* !CONFIG_BT_CTLR_LE_ENC */
-			} else if ((_radio.conn_curr->llcp_req !=
-				     _radio.conn_curr->llcp_ack) ||
-				   (_radio.conn_curr->llcp_conn_param.req !=
-				    _radio.conn_curr->llcp_conn_param.ack)) {
-#endif /* !CONFIG_BT_CTLR_LE_ENC */
 #else /* !CONFIG_BT_CTLR_CONN_PARAM_REQ */
-#if defined(CONFIG_BT_CTLR_LE_ENC)
 			} else if ((_radio.conn_curr->llcp_req !=
 				    _radio.conn_curr->llcp_ack) &&
 				   (_radio.conn_curr->llcp_type !=
 				    LLCP_ENCRYPTION)) {
-#else /* !CONFIG_BT_CTLR_LE_ENC */
-			} else if (_radio.conn_curr->llcp_req !=
-				    _radio.conn_curr->llcp_ack) {
-#endif /* !CONFIG_BT_CTLR_LE_ENC */
 #endif /* !CONFIG_BT_CTLR_CONN_PARAM_REQ */
 				/* Different procedure collision */
 				nack = reject_ext_ind_send(_radio.conn_curr,
@@ -5154,9 +5133,6 @@ static void mayfly_sched_win_offset_select(void *params)
 
 		/* procedure request acked */
 		conn->llcp_ack = conn->llcp_req;
-
-		/* CPR request acked */
-		conn->llcp_conn_param.ack = conn->llcp_conn_param.req;
 
 		/* reset mutex */
 		_radio.conn_upd = NULL;
@@ -8912,12 +8888,6 @@ static u32_t conn_update_req(struct connection *conn)
 		return 1;
 	}
 
-#if defined(CONFIG_BT_CTLR_CONN_PARAM_REQ)
-	if (conn->llcp_conn_param.req != conn->llcp_conn_param.ack) {
-		return 1;
-	}
-#endif /* CONFIG_BT_CTLR_CONN_PARAM_REQ */
-
 	if (!conn->role) {
 		conn->llcp.conn_upd.win_size = 1;
 		conn->llcp.conn_upd.win_offset_us = 0;
@@ -8951,7 +8921,7 @@ static u32_t conn_update_req(struct connection *conn)
 		conn->llcp_conn_param.ack--;
 
 		return 0;
-#endif /* CONFIG_BT_CTLR_CONN_PARAM_REQ */
+#endif /* !CONFIG_BT_CTLR_CONN_PARAM_REQ */
 
 	}
 

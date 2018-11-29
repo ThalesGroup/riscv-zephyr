@@ -1,27 +1,26 @@
 if(EMU_PLATFORM)
   # TODO: Support more emulators
 
+  # QEMU_INSTANCE is a command line argument to make. By appending the
+  # instance name to the pid file we can easily run more instances of
+  # the same sample.
+
   set(qemu_targets
     run
     debugserver
     )
 
-  # We can set "default" value for QEMU_PTY & QEMU_PIPE on cmake invocation.
+  set(QEMU_FLAGS -serial)
   if(QEMU_PTY)
-    # Send console output to a pseudo-tty, used for running automated tests
-    set(CMAKE_QEMU_SERIAL0 pty)
+    list(APPEND QEMU_FLAGS pty)
   else()
     if(QEMU_PIPE)
-      # Send console output to a pipe, used for running automated tests
-      set(CMAKE_QEMU_SERIAL0 pipe:${QEMU_PIPE})
+      # Send console output to a pipe, used for running automated sanity tests
+      list(APPEND QEMU_FLAGS pipe:${QEMU_PIPE})
     else()
-      set(CMAKE_QEMU_SERIAL0 mon:stdio)
+      list(APPEND QEMU_FLAGS mon:stdio)
     endif()
   endif()
-
-  # But also can set QEMU_PTY & QEMU_PIPE on *make* (not cmake) invocation,
-  # like it was before cmake.
-  set(QEMU_FLAGS -serial \${if \${QEMU_PTY}, pty, \${if \${QEMU_PIPE}, pipe:\${QEMU_PIPE}, ${CMAKE_QEMU_SERIAL0}}})
 
   # Add a BT serial device when building for bluetooth, unless the
   # application explicitly opts out with NO_QEMU_SERIAL_BT_SERVER.
@@ -58,11 +57,8 @@ if(EMU_PLATFORM)
           -pidfile qemu-${target}.pid
           )
       else()
-        # QEMU_INSTANCE is a command line argument to *make* (not cmake). By
-        # appending the instance name to the pid file we can easily run more
-        # instances of the same sample.
         list(APPEND MORE_FLAGS_FOR_${target}
-          -serial unix:/tmp/slip.sock\${QEMU_INSTANCE}
+          -serial unix:/tmp/slip.sock${QEMU_INSTANCE}
           )
       endif()
     endforeach()
@@ -154,12 +150,11 @@ if(EMU_PLATFORM)
       COMMAND
       ${QEMU}
       ${QEMU_FLAGS_${ARCH}}
-      -pidfile qemu\${QEMU_INSTANCE}.pid
+      -pidfile qemu${QEMU_INSTANCE}.pid
       ${QEMU_FLAGS}
       ${QEMU_EXTRA_FLAGS}
       ${MORE_FLAGS_FOR_${target}}
       -kernel $<TARGET_FILE:${logical_target_for_zephyr_elf}>
-      DEPENDS ${logical_target_for_zephyr_elf}
       WORKING_DIRECTORY ${APPLICATION_BINARY_DIR}
       COMMENT "${QEMU_PIPE_COMMENT}[QEMU] CPU: ${QEMU_CPU_TYPE_${ARCH}}"
       USES_TERMINAL

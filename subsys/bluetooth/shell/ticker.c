@@ -13,7 +13,6 @@
 #include <shell/shell.h>
 #include <misc/printk.h>
 
-#include "../controller/util/memq.h"
 #include "../controller/util/mayfly.h"
 #include "../controller/ticker/ticker.h"
 

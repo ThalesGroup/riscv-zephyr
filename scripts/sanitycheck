@@ -271,16 +271,16 @@ class Handler:
         """Constructor
 
         @param name Arbitrary name of the created thread
-        @param outdir Working directory, should be where handler pid file (qemu.pid for example)
-            gets created by the build system
-        @param log_fn Absolute path to write out handler's log data
-        @param timeout Kill the handler process if it doesn't finish up within
+        @param outdir Working directory, should be where qemu.pid gets created
+            by kbuild
+        @param log_fn Absolute path to write out QEMU's log data
+        @param timeout Kill the QEMU process if it doesn't finish up within
             the given number of seconds
         """
         self.lock = threading.Lock()
         self.state = "waiting"
         self.metrics = {}
-        self.metrics["handler_time"] = 0
+        self.metrics["qemu_time"] = 0
         self.metrics["ram_size"] = 0
         self.metrics["rom_size"] = 0
         self.unit = unit
@@ -423,9 +423,9 @@ class QEMUHandler(Handler):
             # APIs. Add whatever gets reported to the metrics dictionary
             line = ""
 
-        metrics["handler_time"] = time.time() - start_time
+        metrics["qemu_time"] = time.time() - start_time
         verbose("QEMU complete (%s) after %f seconds" %
-                (out_state, metrics["handler_time"]))
+                (out_state, metrics["qemu_time"]))
         handler.set_state(out_state, metrics)
 
         log_out_fp.close()
@@ -448,7 +448,7 @@ class QEMUHandler(Handler):
 
         @param name Arbitrary name of the created thread
         @param outdir Working directory, should be where qemu.pid gets created
-            by the build system
+            by kbuild
         @param log_fn Absolute path to write out QEMU's log data
         @param timeout Kill the QEMU process if it doesn't finish up within
             the given number of seconds
@@ -678,7 +678,7 @@ class MakeGenerator:
 \t\t-B{outdir}\\
 \t\t-DEXTRA_CFLAGS="-Werror {cflags}"\\
 \t\t-DEXTRA_AFLAGS=-Wa,--fatal-warnings\\
-\t\t-DEXTRA_LDFLAGS=-Wl,--fatal-warnings\\
+\t\t-DEXTRA_LDFLAGS=--fatal-warnings\\
 \t\t{args}\\
 \t\t>{logfile} 2>&1
 \t$(MAKE) -C {outdir}\\
@@ -1332,13 +1332,16 @@ class TestSuite:
             board_root = os.path.abspath(board_root)
 
             debug("Reading platform configuration files under %s..." % board_root)
-            for fn in glob.glob(os.path.join(board_root, "*", "*", "*.yaml")):
-                verbose("Found plaform configuration " + fn)
-                try:
-                    platform = Platform(fn)
-                    self.platforms.append(platform)
-                except RuntimeError as e:
-                    error("E: %s: can't load: %s" % (fn, e))
+            for dirpath, dirnames, filenames in os.walk(board_root):
+                for filename in filenames:
+                    if filename.endswith(".yaml"):
+                        fn = os.path.join(dirpath, filename)
+                        verbose("Found plaform configuration " + fn)
+                        try:
+                            platform = Platform(fn)
+                            self.platforms.append(platform)
+                        except RuntimeError as e:
+                            error("E: %s: can't load: %s" % (fn, e))
 
         arches = []
         for p in self.platforms:
@@ -1773,7 +1776,7 @@ class TestSuite:
             eleTestsuite = ET.SubElement(eleTestsuites, 'testsuite', name=run, time="%d" %duration,
                     tests="%d" %(errors + passes + fails),  failures="%d" %fails,  errors="%d" %errors, skip="0")
 
-        handler_time = "0"
+        qemu_time = "0"
         for name, goal in self.goals.items():
 
             i = self.instances[name]
@@ -1783,9 +1786,9 @@ class TestSuite:
                         eleTestsuite.remove(tc)
 
             if not goal.failed and goal.qemu:
-                    handler_time = "%s" %(goal.metrics["handler_time"])
+                    qemu_time = "%s" %(goal.metrics["qemu_time"])
 
-            eleTestcase = ET.SubElement(eleTestsuite, 'testcase', classname="%s:%s" %(i.platform.name, i.test.name), name="%s" %(name), time=handler_time)
+            eleTestcase = ET.SubElement(eleTestsuite, 'testcase', classname="%s:%s" %(i.platform.name, i.test.name), name="%s" %(name), time=qemu_time)
             if goal.failed:
                 failure = ET.SubElement(eleTestcase, 'failure', type="failure", message=goal.reason)
                 p = ("%s/%s/%s" %(args.outdir, i.platform.name, i.test.name))
@@ -1811,7 +1814,7 @@ class TestSuite:
 
         with open(filename, "wt") as csvfile:
             fieldnames = ["test", "arch", "platform", "passed", "status",
-                          "extra_args", "qemu", "handler_time", "ram_size",
+                          "extra_args", "qemu", "qemu_time", "ram_size",
                           "rom_size"]
             cw = csv.DictWriter(csvfile, fieldnames, lineterminator=os.linesep)
             cw.writeheader()
@@ -1828,7 +1831,7 @@ class TestSuite:
                 else:
                     rowdict["passed"] = True
                     if goal.qemu:
-                        rowdict["handler_time"] = goal.metrics["handler_time"]
+                        rowdict["qemu_time"] = goal.metrics["qemu_time"]
                     rowdict["ram_size"] = goal.metrics["ram_size"]
                     rowdict["rom_size"] = goal.metrics["rom_size"]
                 cw.writerow(rowdict)
@@ -2090,6 +2093,8 @@ def main():
     global VERBOSE, INLINE_LOGS, CPU_COUNTS, log_file
     args = parse_arguments()
     toolchain = os.environ.get("ZEPHYR_GCC_VARIANT", None)
+    if toolchain == "zephyr":
+        os.environ["DISABLE_TRYRUN"] = "1"
 
     if args.size:
         for fn in args.size:

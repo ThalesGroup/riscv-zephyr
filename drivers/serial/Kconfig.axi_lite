@@ -1,0 +1,7 @@
+
+menuconfig UART_AXI_LITE
+	bool "AXI UART Lite driver"
+	default n
+	select SERIAL_HAS_DRIVER
+	help
+	Enable the AXI UART Lite driver.

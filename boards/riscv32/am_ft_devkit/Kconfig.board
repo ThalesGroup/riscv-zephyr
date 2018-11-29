@@ -1,0 +1,3 @@
+config BOARD_AM_FT_DEVKIT
+	bool "am_ft_devkit target"
+	depends on SOC_RISCV32_FE310

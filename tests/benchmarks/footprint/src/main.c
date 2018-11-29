@@ -107,6 +107,7 @@ static pfunc func_array[] = {
 	/* mem pools */
 	(pfunc)k_mem_pool_alloc,
 	(pfunc)k_mem_pool_free,
+	(pfunc)k_mem_pool_defrag,
 	(pfunc)k_malloc,
 	(pfunc)k_free,
 

@@ -7,20 +7,6 @@
 #ifndef __JSON_H
 #define __JSON_H
 
-
-
-/**
- * @brief Structured Data
- * @defgroup structured_data Structured Data
- */
-
-
-/**
- * @defgroup json JSON
- * @ingroup structured_data
- * @{
- */
-
 #include <misc/util.h>
 #include <stddef.h>
 #include <zephyr/types.h>
@@ -542,7 +528,4 @@ int json_obj_encode(const struct json_obj_descr *descr, size_t descr_len,
 		    const void *val, json_append_bytes_t append_bytes,
 		    void *data);
 
-/**
- * @}
- */
 #endif /* __JSON_H */

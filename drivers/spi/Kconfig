@@ -67,6 +67,14 @@ config SPI_STM32_INTERRUPT
 	help
 	  Enable Interrupt support for the SPI Driver of STM32 family.
 
+config SPI_FE310
+	bool
+	prompt "Freedom E 310 SPI controller driver"
+	depends on SPI
+	default n
+	help
+	  Enable SPI support on FE310 SoC
+
 if SPI
 config SPI_INIT_PRIORITY
 	int "Init priority"

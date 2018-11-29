@@ -3,11 +3,6 @@
 File System APIs
 #####################
 
-
-.. comment
-   not documenting
-   .. doxygengroup:: file_system
-
 File System Functions
 *******************************
 

@@ -790,29 +790,6 @@ static void gatt_proxy_set(struct bt_mesh_model *model,
 	}
 
 	cfg->gatt_proxy = buf->data[0];
-	if (cfg->gatt_proxy == BT_MESH_GATT_PROXY_DISABLED) {
-		int i;
-
-		/* Section 4.2.11.1: "When the GATT Proxy state is set to
-		 * 0x00, the Node Identity state for all subnets shall be set
-		 * to 0x00 and shall not be changed."
-		 */
-		for (i = 0; i < ARRAY_SIZE(bt_mesh.sub); i++) {
-			struct bt_mesh_subnet *sub = &bt_mesh.sub[i];
-
-			if (sub->net_idx != BT_MESH_KEY_UNUSED) {
-				bt_mesh_proxy_identity_stop(sub);
-			}
-		}
-
-		/* Section 4.2.11: "Upon transition from GATT Proxy state 0x01
-		 * to GATT Proxy state 0x00 the GATT Bearer Server shall
-		 * disconnect all GATT Bearer Clients.
-		 */
-		bt_mesh_proxy_gatt_disconnect();
-	}
-
-	bt_mesh_adv_update();
 
 	sub = bt_mesh_subnet_get(cfg->hb_pub.net_idx);
 	if ((cfg->hb_pub.feat & BT_MESH_FEAT_PROXY) && sub) {
@@ -907,20 +884,14 @@ static void relay_set(struct bt_mesh_model *model,
 	if (!cfg) {
 		BT_WARN("No Configuration Server context available");
 	} else if (buf->data[0] == 0x00 || buf->data[0] == 0x01) {
+		bool change = (cfg->relay != buf->data[0]);
 		struct bt_mesh_subnet *sub;
-		bool change;
 
-		if (cfg->relay == BT_MESH_RELAY_NOT_SUPPORTED) {
-			change = false;
-		} else {
-			change = (cfg->relay != buf->data[0]);
-			cfg->relay = buf->data[0];
-			cfg->relay_retransmit = buf->data[1];
-		}
+		cfg->relay = buf->data[0];
+		cfg->relay_retransmit = buf->data[1];
 
-		BT_DBG("Relay 0x%02x (%s) xmit 0x%02x (count %u interval %u)",
-		       cfg->relay, change ? "changed" : "not changed",
-		       cfg->relay_retransmit,
+		BT_DBG("Relay 0x%02x Retransmit 0x%02x (count %u interval %u)",
+		       cfg->relay, cfg->relay_retransmit,
 		       BT_MESH_TRANSMIT_COUNT(cfg->relay_retransmit),
 		       BT_MESH_TRANSMIT_INT(cfg->relay_retransmit))
 
@@ -1243,9 +1214,6 @@ static void send_mod_sub_status(struct bt_mesh_model *model,
 {
 	/* Needed size: opcode (2 bytes) + msg + MIC */
 	struct net_buf_simple *msg = NET_BUF_SIMPLE(2 + 9 + 4);
-
-	BT_DBG("status 0x%02x elem_addr 0x%04x sub_addr 0x%04x", status,
-	       elem_addr, sub_addr);
 
 	bt_mesh_model_msg_init(msg, OP_MOD_SUB_STATUS);
 
@@ -1965,9 +1933,6 @@ static void net_key_add(struct bt_mesh_model *model,
 
 	sub->net_idx = idx;
 
-	/* Make sure we have valid beacon data to be sent */
-	bt_mesh_net_beacon_update(sub);
-
 	if (IS_ENABLED(CONFIG_BT_MESH_GATT_PROXY)) {
 		sub->node_id = BT_MESH_NODE_IDENTITY_STOPPED;
 		bt_mesh_proxy_beacon_send(sub);
@@ -2018,7 +1983,7 @@ static void net_key_update(struct bt_mesh_model *model,
 			send_net_key_status(model, ctx, idx, STATUS_SUCCESS);
 			return;
 		}
-		/* fall through */
+		break;
 	case BT_MESH_KR_PHASE_2:
 	case BT_MESH_KR_PHASE_3:
 		send_net_key_status(model, ctx, idx, STATUS_CANNOT_UPDATE);
@@ -2028,7 +1993,7 @@ static void net_key_update(struct bt_mesh_model *model,
 	err = bt_mesh_net_keys_create(&sub->keys[1], buf->data);
 	if (!err && (IS_ENABLED(CONFIG_BT_MESH_LOW_POWER) ||
 		     IS_ENABLED(CONFIG_BT_MESH_FRIEND))) {
-		err = friend_cred_update(sub);
+		err = bt_mesh_friend_cred_update(ctx->net_idx, 1, buf->data);
 	}
 
 	if (err) {
@@ -2227,17 +2192,8 @@ static void node_identity_set(struct bt_mesh_model *model,
 		net_buf_simple_add_u8(msg, STATUS_SUCCESS);
 		net_buf_simple_add_le16(msg, idx);
 
-		/* Section 4.2.11.1: "When the GATT Proxy state is set to
-		 * 0x00, the Node Identity state for all subnets shall be set
-		 * to 0x00 and shall not be changed."
-		 */
-		if (IS_ENABLED(CONFIG_BT_MESH_GATT_PROXY) &&
-		    bt_mesh_gatt_proxy_get() == BT_MESH_GATT_PROXY_ENABLED) {
-			if (node_id) {
-				bt_mesh_proxy_identity_start(sub);
-			} else {
-				bt_mesh_proxy_identity_stop(sub);
-			}
+		if (IS_ENABLED(CONFIG_BT_MESH_GATT_PROXY)) {
+			sub->node_id = node_id;
 			bt_mesh_adv_update();
 		}
 
@@ -2645,7 +2601,7 @@ static void krp_set(struct bt_mesh_model *model, struct bt_mesh_msg_ctx *ctx,
 		bt_mesh_net_revoke_keys(sub);
 		if (IS_ENABLED(CONFIG_BT_MESH_LOW_POWER) ||
 		    IS_ENABLED(CONFIG_BT_MESH_FRIEND)) {
-			friend_cred_refresh(ctx->net_idx);
+			bt_mesh_friend_cred_refresh(ctx->net_idx);
 		}
 		sub->kr_phase = BT_MESH_KR_NORMAL;
 		sub->kr_flag = 0;
@@ -3222,17 +3178,11 @@ u8_t *bt_mesh_label_uuid_get(u16_t addr)
 {
 	int i;
 
-	BT_DBG("addr 0x%04x", addr);
-
 	for (i = 0; i < ARRAY_SIZE(labels); i++) {
 		if (labels[i].addr == addr) {
-			BT_DBG("Found Label UUID for 0x%04x: %s", addr,
-			       bt_hex(labels[i].uuid, 16));
 			return labels[i].uuid;
 		}
 	}
-
-	BT_WARN("No matching Label UUID for 0x%04x", addr);
 
 	return NULL;
 }

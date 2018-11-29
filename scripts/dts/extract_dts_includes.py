@@ -8,7 +8,6 @@ import os, fnmatch
 import re
 import yaml
 import argparse
-import collections
 
 from devicetree import parse_file
 
@@ -509,15 +508,16 @@ def extract_node_include_info(reduced, root_node_address, sub_node_address,
         y_node = y_sub
 
     if yaml[node_compat].get('use-property-label', False):
-        try:
-            label = y_node['properties']['label']
-            label_override = convert_string_to_label(
-                                    node['props']['label']).upper()
-        except KeyError:
-            pass
+        for yp in y_node['properties']:
+            if yp.get('label') is not None:
+                if node['props'].get('label') is not None:
+                    label_override = convert_string_to_label(
+                        node['props']['label']).upper()
+                    break
 
     # check to see if we need to process the properties
-    for k, v in y_node['properties'].items():
+    for yp in y_node['properties']:
+        for k, v in yp.items():
             if 'properties' in v:
                 for c in reduced:
                     if root_node_address + '/' in c:
@@ -552,55 +552,36 @@ def extract_node_include_info(reduced, root_node_address, sub_node_address,
 
     return
 
-def dict_merge(dct, merge_dct):
-    # from https://gist.github.com/angstwad/bf22d1822c38a92ec0a9
 
-    """ Recursive dict merge. Inspired by :meth:``dict.update()``, instead of
-    updating only top-level keys, dict_merge recurses down into dicts nested
-    to an arbitrary depth, updating keys. The ``merge_dct`` is merged into
-    ``dct``.
-    :param dct: dict onto which the merge is executed
-    :param merge_dct: dct merged into dct
-    :return: None
-    """
-    for k, v in merge_dct.items():
-        if (k in dct and isinstance(dct[k], dict)
-                and isinstance(merge_dct[k], collections.Mapping)):
-            dict_merge(dct[k], merge_dct[k])
-        else:
-            dct[k] = merge_dct[k]
+def yaml_traverse_inherited(node, props):
+    if 'inherits' in node:
+        for inherited in node['inherits']:
+            yaml_traverse_inherited(inherited, props)
 
-def yaml_traverse_inherited(node):
-    """ Recursive overload procedure inside ``node``
-    ``inherits`` section is searched for and used as node base when found.
-    Base values are then overloaded by node values
-    :param node:
-    :return: node
-    """
+    for prop in node['properties']:
+        props.append(prop)
 
-    if 'inherits' in node.keys():
-        try:
-            yaml_traverse_inherited(node['inherits']['inherits'])
-        except KeyError:
-            dict_merge(node['inherits'], node)
-            node = node['inherits']
-            node.pop('inherits')
-        except TypeError:
-            #'node['inherits']['inherits'] type is 'list' instead of
-            #expected type 'dtc'
-            #Likely due to use of "-" before attribute in yaml file
-            raise Exception("Element '" + str(node['title']) +
-                            "' uses yaml 'series' instead of 'mapping'")
-    return node
+    return
 
 
 def yaml_collapse(yaml_list):
-
     collapsed = dict(yaml_list)
 
     for k, v in collapsed.items():
-        v = yaml_traverse_inherited(v)
-        collapsed[k]=v
+        existing = set()
+        if 'properties' in v:
+            for entry in v['properties']:
+                for key in entry:
+                    existing.add(key)
+
+        inh_list = []
+        if 'inherits' in v:
+            yaml_traverse_inherited(v, inh_list)
+            for prop in inh_list:
+                 for key in prop:
+                     if key not in existing:
+                         v['properties'].append(prop)
+            v.pop('inherits')
 
     return collapsed
 

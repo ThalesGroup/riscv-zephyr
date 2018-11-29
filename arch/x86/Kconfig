@@ -46,6 +46,17 @@ config CPU_MINUTEIA
 	bool
 	help
 	This option signifies the use of a CPU from the Minute IA family.
+#
+# End hidden CPU family configs
+#
+
+config CPU_HAS_FPU
+	# Hidden config selected by CPU family
+	bool
+	default n
+	help
+	This option is enabled when the CPU has hardware floating point
+	unit.
 
 menu "Processor Capabilities"
 
@@ -117,8 +128,36 @@ config X86_USERSPACE
 	supporting user-level threads that are protected from each other and
 	from crashing the kernel.
 
-menu "Architecture Floating Point Options"
+menu "Floating Point Options"
 depends on CPU_HAS_FPU
+
+config FLOAT
+	bool
+	prompt "Floating point registers"
+	default n
+	help
+	This option allows threads to use the x87 FPU/MMX registers. The
+	registers may be used by any number of cooperative threads or by
+	a single preemptible thread, but not both, since the kernel does not
+	preserve FPU context information when switching between threads.
+	Additional options must be enabled to permit the use of SSE registers or
+	to permit floating point register use by multiple preemptible threads.
+
+	Disabling this option means that any thread that uses the floating
+	point registers will get a fatal exception.
+
+config FP_SHARING
+	bool
+	prompt "Floating point register sharing"
+	depends on FLOAT
+	default n
+	help
+	This option allows multiple preemptible threads to use the floating
+	point registers. Any preemptible thread that uses the registers must
+	provide stack space where the kernel can save FPU context info during
+	a preemptive context switch. A thread that uses only the x87 FPU/MMX
+	registers must provide 108 bytes of added stack space, while a thread
+	the uses the SSE registers must provide 464 bytes of added stack space.
 
 config SSE
 	bool
@@ -253,6 +292,25 @@ config PIC_DISABLE
 	help
 	This option disables all interrupts on the PIC
 
+config IRQ_OFFLOAD
+	bool "Enable IRQ offload"
+	default n
+	help
+	Enable irq_offload() API which allows functions to be synchronously
+	run in interrupt context. Uses one entry in the	IDT.  Mainly useful
+	for test cases.
+
+config IRQ_OFFLOAD_VECTOR
+	int "IDT vector to use for IRQ offload"
+	default 63 if MVIC
+	default 32 if !MVIC
+	range 32 255
+	depends on IRQ_OFFLOAD
+	help
+	Specify the IDT vector to use for the IRQ offload interrupt handler.
+	The default should be fine for most arches, but on systems like MVIC
+	where there is a fixed IRQ-to-vector mapping another value may be
+	needed to avoid collision.
 
 config X86_KERNEL_OOPS
 	bool "Enable handling of kernel oops as an exception"
@@ -273,19 +331,6 @@ config X86_KERNEL_OOPS_VECTOR
 	The default should be fine for most arches, but on systems like MVIC
 	where there is a fixed IRQ-to-vector mapping another value may be
 	needed to avoid collision.
-
-config IRQ_OFFLOAD_VECTOR
-	int "IDT vector to use for IRQ offload"
-	default 63 if MVIC
-	default 32 if !MVIC
-	range 32 255
-	depends on IRQ_OFFLOAD
-	help
-	Specify the IDT vector to use for the IRQ offload interrupt handler.
-	The default should be fine for most arches, but on systems like MVIC
-	where there is a fixed IRQ-to-vector mapping another value may be
-	needed to avoid collision.
-
 
 config XIP
 	default n

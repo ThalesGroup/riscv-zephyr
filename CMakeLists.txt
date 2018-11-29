@@ -194,7 +194,11 @@ zephyr_cc_option(-fno-pic)
 zephyr_cc_option(-fno-strict-overflow)
 zephyr_cc_option(-Wno-pointer-sign)
 
-zephyr_compile_options_ifdef(CONFIG_STACK_CANARIES -fstack-protector-all)
+if(CONFIG_STACK_CANARIES)
+  zephyr_cc_option(-fstack-protector-all)
+else()
+  zephyr_cc_option(-fno-stack-protector)
+endif()
 
 if(CONFIG_OVERRIDE_FRAME_POINTER_DEFAULT)
   if(CONFIG_OMIT_FRAME_POINTER)
@@ -291,49 +295,6 @@ add_subdirectory(arch)
 add_subdirectory(drivers)
 add_subdirectory(tests)
 
-set(syscall_macros_h ${ZEPHYR_BINARY_DIR}/include/generated/syscall_macros.h)
-
-add_custom_target(syscall_macros_h_target DEPENDS ${syscall_macros_h})
-add_custom_command(                       OUTPUT  ${syscall_macros_h}
-  COMMAND
-  ${PYTHON_EXECUTABLE}
-  ${PROJECT_SOURCE_DIR}/scripts/gen_syscall_header.py
-  > ${syscall_macros_h}
-  DEPENDS ${PROJECT_SOURCE_DIR}/scripts/gen_syscall_header.py
-  )
-
-# This command is a hack to support commands that are always run. Any
-# target that depends on always_rebuild will always be rebuilt.
-add_custom_command(OUTPUT always_rebuild COMMAND cmake -E echo Building for board ${BOARD})
-
-set(syscall_list_h ${CMAKE_CURRENT_BINARY_DIR}/include/generated/syscall_list.h)
-set(syscalls_json  ${CMAKE_CURRENT_BINARY_DIR}/misc/generated/syscalls.json)
-
-add_custom_command(
-  OUTPUT
-  ${syscalls_json}
-  COMMAND
-  ${PYTHON_EXECUTABLE}
-  ${PROJECT_SOURCE_DIR}/scripts/parse_syscalls.py
-  --include          ${PROJECT_SOURCE_DIR}/include        # Read files from this dir
-  --json-file        ${syscalls_json}                     # Write this file
-  DEPENDS always_rebuild
-  )
-
-add_custom_target(syscall_list_h_target DEPENDS                ${syscall_list_h})
-add_custom_command(OUTPUT include/generated/syscall_dispatch.c ${syscall_list_h}
-  # Also, some files are written to include/generated/syscalls/
-  COMMAND
-  ${PYTHON_EXECUTABLE}
-  ${PROJECT_SOURCE_DIR}/scripts/gen_syscalls.py
-  --json-file        ${syscalls_json}                     # Read this file
-  --base-output      include/generated/syscalls           # Write to this dir
-  --syscall-dispatch include/generated/syscall_dispatch.c # Write this file
-  > ${syscall_list_h}                                     # Write stdout to this file
-  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-  DEPENDS ${syscalls_json}
-  )
-
 # Generate offsets.c.obj from offsets.c
 # Generate offsets.h     from offsets.c.obj
 
@@ -341,12 +302,8 @@ set(OFFSETS_C_PATH $ENV{ZEPHYR_BASE}/arch/${ARCH}/core/offsets/offsets.c)
 set(OFFSETS_O_PATH ${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/offsets.dir/arch/${ARCH}/core/offsets/offsets.c.obj)
 set(OFFSETS_H_PATH ${PROJECT_BINARY_DIR}/include/generated/offsets.h)
 
-add_library(          offsets STATIC ${OFFSETS_C_PATH})
+add_library(offsets STATIC ${OFFSETS_C_PATH})
 target_link_libraries(offsets zephyr_interface)
-add_dependencies(     offsets
-  syscall_list_h_target
-  syscall_macros_h_target
-  )
 
 add_custom_command(
   OUTPUT ${OFFSETS_H_PATH}
@@ -359,7 +316,7 @@ add_custom_target(offsets_h DEPENDS ${OFFSETS_H_PATH})
 
 zephyr_include_directories(${TOOLCHAIN_INCLUDES})
 
-zephyr_get_include_directories_for_lang(C ZEPHYR_INCLUDES)
+zephyr_get_include_directories(ZEPHYR_INCLUDES)
 
 add_subdirectory(kernel)
 
@@ -507,7 +464,7 @@ set(zephyr_lnk
   ${LINKERFLAGPREFIX},-Map=${PROJECT_BINARY_DIR}/${KERNEL_MAP_NAME}
   -u_OffsetAbsSyms
   -u_ConfigAbsSyms
-  -e${CONFIG_KERNEL_ENTRY}
+  -e__start
   ${LINKERFLAGPREFIX},--start-group
   ${LINKERFLAGPREFIX},--whole-archive
   ${ZEPHYR_LIBS_PROPERTY}
@@ -708,53 +665,17 @@ endif()
 # the zephyr elf, we set the kernel_elf file name to zephyr.elf.
 set_target_properties(${logical_target_for_zephyr_elf} PROPERTIES OUTPUT_NAME ${KERNEL_NAME})
 
-set(post_build_commands "")
-
-list_append_ifdef(CONFIG_CHECK_LINK_MAP
-  post_build_commands
-  COMMAND ${PYTHON_EXECUTABLE} $ENV{ZEPHYR_BASE}/scripts/check_link_map.py ${KERNEL_MAP_NAME}
-  )
-
-list_append_ifdef(
-  CONFIG_BUILD_OUTPUT_HEX
-  post_build_commands
-  COMMAND ${CMAKE_OBJCOPY} -S -Oihex   -R .comment -R COMMON -R .eh_frame  ${KERNEL_ELF_NAME}    ${KERNEL_HEX_NAME}
-  )
-
-list_append_ifdef(
-  CONFIG_BUILD_OUTPUT_BIN
-  post_build_commands
-  COMMAND ${CMAKE_OBJCOPY} -S -Obinary -R .comment -R COMMON -R .eh_frame  ${KERNEL_ELF_NAME}    ${KERNEL_BIN_NAME}
-  )
-list_append_ifdef(
-  CONFIG_BUILD_OUTPUT_S19
-  post_build_commands
-  COMMAND ${CMAKE_OBJCOPY} --srec-len 1 --output-target=srec ${KERNEL_ELF_NAME} ${KERNEL_S19_NAME}
-  )
-
-list_append_ifdef(
-  CONFIG_OUTPUT_DISASSEMBLY
-  post_build_commands
-  COMMAND ${CMAKE_OBJDUMP} -S ${KERNEL_ELF_NAME} >  ${KERNEL_LST_NAME}
-  )
-
-list_append_ifdef(
-  CONFIG_OUTPUT_STAT
-  post_build_commands
-  COMMAND ${CMAKE_READELF} -e ${KERNEL_ELF_NAME} >  ${KERNEL_STAT_NAME}
-  )
-
-list_append_ifdef(
-  CONFIG_BUILD_OUTPUT_STRIPPED
-  post_build_commands
-  COMMAND ${CMAKE_STRIP}   --strip-all ${KERNEL_ELF_NAME} -o ${KERNEL_STRIP_NAME}
-  )
-
 add_custom_command(
   TARGET ${logical_target_for_zephyr_elf}
   POST_BUILD
-  ${post_build_commands}
-  COMMENT "Generating files from zephyr.elf for board: ${BOARD}"
+  COMMAND ${PYTHON_EXECUTABLE} $ENV{ZEPHYR_BASE}/scripts/check_link_map.py ${KERNEL_MAP_NAME}
+  COMMAND ${CMAKE_OBJCOPY} -S -Oihex   -R .comment -R COMMON -R .eh_frame  ${KERNEL_ELF_NAME}    ${KERNEL_HEX_NAME}
+  COMMAND ${CMAKE_OBJCOPY} -S -Obinary -R .comment -R COMMON -R .eh_frame  ${KERNEL_ELF_NAME}    ${KERNEL_BIN_NAME}
+  COMMAND ${CMAKE_OBJCOPY} --srec-len 1 --output-target=srec               ${KERNEL_ELF_NAME}    ${KERNEL_S19_NAME}
+  COMMAND ${CMAKE_OBJDUMP} -S                                              ${KERNEL_ELF_NAME} >  ${KERNEL_LST_NAME}
+  COMMAND ${CMAKE_READELF} -e                                              ${KERNEL_ELF_NAME} >  ${KERNEL_STAT_NAME}
+  COMMAND ${CMAKE_STRIP}   --strip-all                                     ${KERNEL_ELF_NAME} -o ${KERNEL_STRIP_NAME}
+  COMMENT "Generating zephyr.{hex,bin,lst,strip,stat,s19} from zephyr.elf for board: ${BOARD}"
   # NB: COMMENT only works for some CMake-Generators
 )
 

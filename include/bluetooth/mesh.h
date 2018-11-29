@@ -23,10 +23,6 @@
 #include <bluetooth/mesh/cfg_cli.h>
 #endif
 
-#if defined(CONFIG_BT_MESH_HEALTH_CLI)
-#include <bluetooth/mesh/health_cli.h>
-#endif
-
 #if defined(CONFIG_BT_MESH_GATT_PROXY)
 #include <bluetooth/mesh/proxy.h>
 #endif

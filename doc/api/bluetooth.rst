@@ -15,12 +15,26 @@ of the Bluetooth functionality is build-time selectable. E.g. any
 connection-related APIs require :option:`CONFIG_BT_CONN` and any
 BR/EDR (Bluetooth Classic) APIs require :option:`CONFIG_BT_BREDR`.
 
-.. comment
-   not documenting
-   .. doxygengroup:: bluetooth
+Generic Access Profile (GAP)
+****************************
 
-Bluetooth Mesh Profile
-**********************
+.. doxygengroup:: bt_gap
+   :project: Zephyr
+
+Connection Management
+*********************
+
+.. doxygengroup:: bt_conn
+   :project: Zephyr
+
+Generic Attribute Profile (GATT)
+********************************
+
+.. doxygengroup:: bt_gatt
+   :project: Zephyr
+
+Mesh Profile
+************
 
 .. doxygengroup:: bt_mesh
    :project: Zephyr
@@ -43,12 +57,6 @@ Bluetooth Mesh Configuration Server Model
 .. doxygengroup:: bt_mesh_cfg_srv
    :project: Zephyr
 
-Bluetooth Mesh Health Client Model
-==================================
-
-.. doxygengroup:: bt_mesh_health_cli
-   :project: Zephyr
-
 Bluetooth Mesh Health Server Model
 ==================================
 
@@ -67,16 +75,23 @@ Bluetooth Mesh Proxy
 .. doxygengroup:: bt_mesh_proxy
    :project: Zephyr
 
-Connection Management
-*********************
 
-.. doxygengroup:: bt_conn
+Universal Unique Identifiers (UUIDs)
+************************************
+
+.. doxygengroup:: bt_uuid
    :project: Zephyr
 
-Cryptography
-************
+Logical Link Control and Adaptation Protocol (L2CAP)
+****************************************************
 
-.. doxygengroup:: bt_crypto
+.. doxygengroup:: bt_l2cap
+   :project: Zephyr
+
+Serial Port Emulation (RFCOMM)
+******************************
+
+.. doxygengroup:: bt_rfcomm
    :project: Zephyr
 
 Data Buffers
@@ -85,16 +100,16 @@ Data Buffers
 .. doxygengroup:: bt_buf
    :project: Zephyr
 
-Generic Access Profile (GAP)
-****************************
+Persistent Storage
+******************
 
-.. doxygengroup:: bt_gap
+.. doxygengroup:: bt_storage
    :project: Zephyr
 
-Generic Attribute Profile (GATT)
-********************************
+HCI Drivers
+***********
 
-.. doxygengroup:: bt_gatt
+.. doxygengroup:: bt_hci_driver
    :project: Zephyr
 
 HCI RAW channel
@@ -106,46 +121,4 @@ Bluetooth stack is not used. RAW API provides direct access to packets which
 are sent and received by the Bluetooth HCI driver.
 
 .. doxygengroup:: hci_raw
-   :project: Zephyr
-
-HCI Drivers
-***********
-
-.. doxygengroup:: bt_hci_driver
-   :project: Zephyr
-
-Hands Free Profile (HFP)
-************************
-
-.. doxygengroup:: bt_hfp
-   :project: Zephyr
-
-Logical Link Control and Adaptation Protocol (L2CAP)
-****************************************************
-
-.. doxygengroup:: bt_l2cap
-   :project: Zephyr
-
-Persistent Storage
-******************
-
-.. doxygengroup:: bt_storage
-   :project: Zephyr
-
-Serial Port Emulation (RFCOMM)
-******************************
-
-.. doxygengroup:: bt_rfcomm
-   :project: Zephyr
-
-Service Discovery Protocol (SDP)
-********************************
-
-.. doxygengroup:: bt_sdp
-   :project: Zephyr
-
-Universal Unique Identifiers (UUIDs)
-************************************
-
-.. doxygengroup:: bt_uuid
    :project: Zephyr

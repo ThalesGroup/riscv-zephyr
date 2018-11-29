@@ -25,6 +25,7 @@
 #include "crypto.h"
 #include "beacon.h"
 #include "foundation.h"
+#include "friend.h"
 
 #define UNPROVISIONED_INTERVAL     K_SECONDS(5)
 #define PROVISIONED_INTERVAL       K_SECONDS(10)
@@ -42,18 +43,24 @@
 
 static struct k_delayed_work beacon_timer;
 
+static struct {
+	u16_t net_idx;
+	u8_t  data[21];
+} beacon_cache[CONFIG_BT_MESH_SUBNET_COUNT];
+
 static struct bt_mesh_subnet *cache_check(u8_t data[21])
 {
+	struct bt_mesh_subnet *sub;
 	int i;
 
-	for (i = 0; i < ARRAY_SIZE(bt_mesh.sub); i++) {
-		struct bt_mesh_subnet *sub = &bt_mesh.sub[i];
-
-		if (sub->net_idx == BT_MESH_KEY_UNUSED) {
+	for (i = 0; i < ARRAY_SIZE(beacon_cache); i++) {
+		if (memcmp(beacon_cache[i].data, data, 21)) {
 			continue;
 		}
 
-		if (!memcmp(sub->beacon_cache, data, 21)) {
+		sub = bt_mesh_subnet_get(beacon_cache[i].net_idx);
+		if (sub) {
+			BT_DBG("Match found in cache");
 			return sub;
 		}
 	}
@@ -61,9 +68,9 @@ static struct bt_mesh_subnet *cache_check(u8_t data[21])
 	return NULL;
 }
 
-static void cache_add(u8_t data[21], struct bt_mesh_subnet *sub)
+static void cache_add(u8_t data[21], u16_t net_idx)
 {
-	memcpy(sub->beacon_cache, data, 21);
+	memcpy(beacon_cache[net_idx].data, data, 21);
 }
 
 static void beacon_complete(int err, void *user_data)
@@ -129,8 +136,7 @@ static int secure_beacon_send(void)
 		}
 
 		time_diff = now - sub->beacon_sent;
-		if (time_diff < K_SECONDS(600) &&
-		    time_diff < BEACON_THRESHOLD(sub)) {
+		if (time_diff < BEACON_THRESHOLD(sub)) {
 			continue;
 		}
 
@@ -272,7 +278,7 @@ static void secure_beacon_recv(struct net_buf_simple *buf)
 		return;
 	}
 
-	cache_add(data, sub);
+	cache_add(data, sub->net_idx);
 
 	/* If we have NetKey0 accept initiation only from it */
 	if (bt_mesh_subnet_get(BT_MESH_KEY_PRIMARY) &&
@@ -289,19 +295,19 @@ static void secure_beacon_recv(struct net_buf_simple *buf)
 		bt_mesh_beacon_ivu_initiator(false);
 	}
 
-	iv_change = bt_mesh_net_iv_update(iv_index, BT_MESH_IV_UPDATE(flags));
+	iv_change = bt_mesh_iv_update(iv_index, BT_MESH_IV_UPDATE(flags));
 
 	kr_change = bt_mesh_kr_update(sub, BT_MESH_KEY_REFRESH(flags), new_key);
 	if (kr_change) {
 		bt_mesh_net_beacon_update(sub);
 	}
 
-	if (iv_change) {
-		/* Update all subnets */
-		bt_mesh_net_sec_update(NULL);
-	} else if (kr_change) {
-		/* Key Refresh without IV Update only impacts one subnet */
-		bt_mesh_net_sec_update(sub);
+	if (IS_ENABLED(CONFIG_BT_MESH_FRIEND) && (iv_change || kr_change)) {
+		if (iv_change) {
+			bt_mesh_friend_sec_update(BT_MESH_KEY_ANY);
+		} else {
+			bt_mesh_friend_sec_update(sub->net_idx);
+		}
 	}
 
 update_stats:

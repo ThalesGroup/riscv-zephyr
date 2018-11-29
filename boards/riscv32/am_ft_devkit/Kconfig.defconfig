@@ -1,0 +1,18 @@
+if BOARD_AM_FT_DEVKIT
+
+config BOARD
+	default "am_ft_devkit"
+
+config RISCV_ROM_BASE_ADDR
+    default 0x60000000
+
+config RISCV_ROM_SIZE
+    default 0x00010000
+
+config RISCV_RAM_BASE_ADDR
+    default 0x60010000
+
+config RISCV_RAM_SIZE
+    default 0x04000000
+
+endif

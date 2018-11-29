@@ -37,7 +37,9 @@ static void health_get_registered(struct bt_mesh_model *mod,
 				  struct net_buf_simple *msg)
 {
 	struct bt_mesh_health_srv *srv = mod->user_data;
+	u8_t fault_count;
 	u8_t *test_id;
+	int err;
 
 	BT_DBG("Company ID 0x%04x", company_id);
 
@@ -45,11 +47,9 @@ static void health_get_registered(struct bt_mesh_model *mod,
 
 	test_id = net_buf_simple_add(msg, 1);
 	net_buf_simple_add_le16(msg, company_id);
+	fault_count = net_buf_simple_tailroom(msg) - 4;
 
 	if (srv->cb && srv->cb->fault_get_reg) {
-		u8_t fault_count = net_buf_simple_tailroom(msg) - 4;
-		int err;
-
 		err = srv->cb->fault_get_reg(mod, company_id, test_id,
 					     net_buf_simple_tail(msg),
 					     &fault_count);
@@ -81,8 +81,9 @@ static size_t health_get_current(struct bt_mesh_model *mod,
 	company_ptr = net_buf_simple_add(msg, sizeof(company_id));
 	comp = bt_mesh_comp_get();
 
+	fault_count = net_buf_simple_tailroom(msg) - 4;
+
 	if (srv->cb && srv->cb->fault_get_cur) {
-		fault_count = net_buf_simple_tailroom(msg);
 		err = srv->cb->fault_get_cur(mod, test_id, &company_id,
 					     net_buf_simple_tail(msg),
 					     &fault_count);
@@ -167,6 +168,7 @@ static void health_fault_test_unrel(struct bt_mesh_model *model,
 				    struct net_buf_simple *buf)
 {
 	struct bt_mesh_health_srv *srv = model->user_data;
+	const struct bt_mesh_comp *comp;
 	u16_t company_id;
 	u8_t test_id;
 
@@ -174,6 +176,13 @@ static void health_fault_test_unrel(struct bt_mesh_model *model,
 	company_id = net_buf_simple_pull_le16(buf);
 
 	BT_DBG("test 0x%02x company 0x%04x", test_id, company_id);
+
+	comp = bt_mesh_comp_get();
+	if (comp->cid != company_id) {
+		BT_WARN("CID 0x%04x doesn't match composition CID 0x%04x",
+			company_id, comp->cid);
+		return;
+	}
 
 	if (srv->cb && srv->cb->fault_test) {
 		srv->cb->fault_test(model, test_id, company_id);
@@ -357,7 +366,8 @@ int bt_mesh_fault_update(struct bt_mesh_elem *elem)
 		return -EINVAL;
 	}
 
-	return bt_mesh_model_publish(mod);
+	k_delayed_work_submit(&mod->pub->timer, K_NO_WAIT);
+	return 0;
 }
 
 static void attention_off(struct k_work *work)

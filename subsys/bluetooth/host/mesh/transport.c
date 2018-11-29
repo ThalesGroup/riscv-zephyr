@@ -182,12 +182,10 @@ static void seg_tx_reset(struct seg_tx *tx)
 	if (bt_mesh.pending_update) {
 		BT_DBG("Proceding with pending IV Update");
 		bt_mesh.pending_update = 0;
-		/* bt_mesh_net_iv_update() will re-enable the flag if this
+		/* bt_mesh_iv_update() will re-enable the flag if this
 		 * wasn't the only transfer.
 		 */
-		if (bt_mesh_net_iv_update(bt_mesh.iv_index, false)) {
-			bt_mesh_net_sec_update(NULL);
-		}
+		bt_mesh_iv_update(bt_mesh.iv_index, false);
 	}
 }
 
@@ -385,7 +383,7 @@ static int send_seg(struct bt_mesh_net_tx *net_tx, struct net_buf_simple *sdu,
 	}
 
 	if (bt_mesh_lpn_established()) {
-		bt_mesh_lpn_poll();
+		bt_mesh_lpn_friend_poll();
 	}
 
 	return 0;
@@ -517,8 +515,7 @@ static bool is_replay(struct bt_mesh_net_rx *rx)
 				return true;
 			}
 
-			if ((!rx->old_iv && rpl->old_iv) ||
-			    rpl->seq < rx->seq) {
+			if (rpl->seq < rx->seq) {
 				rpl->seq = rx->seq;
 				rpl->old_iv = rx->old_iv;
 				return false;
@@ -922,7 +919,7 @@ static int send_ack(struct bt_mesh_subnet *sub, u16_t src, u16_t dst,
 	u16_t seq_zero = *seq_auth & 0x1fff;
 	u8_t buf[6];
 
-	BT_DBG("SeqZero 0x%04x Block 0x%08x OBO %u", seq_zero, block, obo);
+	BT_DBG("SeqZero 0x%04x Block 0x%08x", seq_zero, block);
 
 	if (bt_mesh_lpn_established()) {
 		BT_WARN("Not sending ack when LPN is enabled");
@@ -1374,10 +1371,4 @@ void bt_mesh_trans_init(void)
 	for (i = 0; i < ARRAY_SIZE(seg_rx); i++) {
 		k_delayed_work_init(&seg_rx[i].ack, seg_ack);
 	}
-}
-
-void bt_mesh_rpl_clear(void)
-{
-	BT_DBG("");
-	memset(bt_mesh.rpl, 0, sizeof(bt_mesh.rpl));
 }

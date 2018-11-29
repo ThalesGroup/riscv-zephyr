@@ -1,5 +1,4 @@
 include(CheckCCompilerFlag)
-include(CheckCXXCompilerFlag)
 
 ########################################################
 # Table of contents
@@ -117,7 +116,7 @@ endfunction()
 # includes, options).
 #
 # The naming convention follows:
-# zephyr_get_${build_information}_for_lang${format}(lang x)
+# zephyr_get_${build_information}${format}(x)
 # Where
 #  the argument 'x' is written with the result
 # and
@@ -128,137 +127,67 @@ endfunction()
 #   - compile_options               # misc. compiler flags
 # and
 #  ${format} can be
-#   - the empty string '', signifying that it should be returned as a list
-#   - _as_string signifying that it should be returned as a string
-# and
-#  ${lang} can be one of
-#   - C
-#   - CXX
-#   - ASM
+#  the empty string '', signifying that it should be returned as a list
+#  _as_string signifying that it should be returned as a string
 #
 # e.g.
-# zephyr_get_include_directories_for_lang(ASM x)
+# zephyr_get_include_directories(x)
 # writes "-Isome_dir;-Isome/other/dir" to x
 
-function(zephyr_get_include_directories_for_lang_as_string lang i)
-  zephyr_get_include_directories_for_lang(${lang} list_of_flags)
-
-  convert_list_of_flags_to_string_of_flags(list_of_flags str_of_flags)
-
-  set(${i} ${str_of_flags} PARENT_SCOPE)
-endfunction()
-
-function(zephyr_get_system_include_directories_for_lang_as_string lang i)
-  zephyr_get_system_include_directories_for_lang(${lang} list_of_flags)
-
-  convert_list_of_flags_to_string_of_flags(list_of_flags str_of_flags)
-
-  set(${i} ${str_of_flags} PARENT_SCOPE)
-endfunction()
-
-function(zephyr_get_compile_definitions_for_lang_as_string lang i)
-  zephyr_get_compile_definitions_for_lang(${lang} list_of_flags)
-
-  convert_list_of_flags_to_string_of_flags(list_of_flags str_of_flags)
-
-  set(${i} ${str_of_flags} PARENT_SCOPE)
-endfunction()
-
-function(zephyr_get_compile_options_for_lang_as_string lang i)
-  zephyr_get_compile_options_for_lang(${lang} list_of_flags)
-
-  convert_list_of_flags_to_string_of_flags(list_of_flags str_of_flags)
-
-  set(${i} ${str_of_flags} PARENT_SCOPE)
-endfunction()
-
-function(zephyr_get_include_directories_for_lang lang i)
-  get_property_and_add_prefix(flags zephyr_interface INTERFACE_INCLUDE_DIRECTORIES -I)
-
-  process_flags(${lang} flags output_list)
-
-  set(${i} ${output_list} PARENT_SCOPE)
-endfunction()
-
-function(zephyr_get_system_include_directories_for_lang lang i)
-  get_property_and_add_prefix(flags zephyr_interface INTERFACE_SYSTEM_INCLUDE_DIRECTORIES -isystem)
-
-  process_flags(${lang} flags output_list)
-
-  set(${i} ${output_list} PARENT_SCOPE)
-endfunction()
-
-function(zephyr_get_compile_definitions_for_lang lang i)
-  get_property_and_add_prefix(flags zephyr_interface INTERFACE_COMPILE_DEFINITIONS -D)
-
-  process_flags(${lang} flags output_list)
-
-  set(${i} ${output_list} PARENT_SCOPE)
-endfunction()
-
-function(zephyr_get_compile_options_for_lang lang i)
-  get_property(flags TARGET zephyr_interface PROPERTY INTERFACE_COMPILE_OPTIONS)
-
-  process_flags(${lang} flags output_list)
-
-  set(${i} ${output_list} PARENT_SCOPE)
-endfunction()
-
-function(process_flags lang input output)
-  # The flags might contains compile language generator expressions that
-  # look like this:
-  # $<$<COMPILE_LANGUAGE:CXX>:-fno-exceptions>
-  #
-  # Flags that don't specify a language like this apply to all
-  # languages.
-  #
-  # See COMPILE_LANGUAGE in
-  # https://cmake.org/cmake/help/v3.3/manual/cmake-generator-expressions.7.html
-  #
-  # To deal with this, we apply a regex to extract the flag and also
-  # to find out if the language matches.
-  #
-  # If this doesn't work out we might need to ban the use of
-  # COMPILE_LANGUAGE and instead partition C, CXX, and ASM into
-  # different libraries
-  set(languages C CXX ASM)
-
-  set(tmp_list "")
-
-  foreach(flag ${${input}})
-    set(is_compile_lang_generator_expression 0)
-    foreach(l ${languages})
-      if(flag MATCHES "<COMPILE_LANGUAGE:${l}>:([^>]+)>")
-        set(is_compile_lang_generator_expression 1)
-        if(${l} STREQUAL ${lang})
-          list(APPEND tmp_list ${CMAKE_MATCH_1})
-          break()
-        endif()
-      endif()
-    endforeach()
-
-    if(NOT is_compile_lang_generator_expression)
-      list(APPEND tmp_list ${flag})
-    endif()
-  endforeach()
-
-  set(${output} ${tmp_list} PARENT_SCOPE)
-endfunction()
-
-function(convert_list_of_flags_to_string_of_flags ptr_list_of_flags string_of_flags)
-  # Convert the list to a string so we can do string replace
-  # operations on it and replace the ";" list separators with a
-  # whitespace so the flags are spaced out
-  string(REPLACE ";"  " "  locally_scoped_string_of_flags "${${ptr_list_of_flags}}")
-
-  # Set the output variable in the parent scope
-  set(${string_of_flags} ${locally_scoped_string_of_flags} PARENT_SCOPE)
-endfunction()
-
+# Utility macro used by the below macros.
 macro(get_property_and_add_prefix result target property prefix)
   get_property(target_property TARGET ${target} PROPERTY ${property})
   foreach(x ${target_property})
     list(APPEND ${result} ${prefix}${x})
+  endforeach()
+endmacro()
+
+macro(zephyr_get_include_directories i)
+  get_property_and_add_prefix(${i} zephyr_interface INTERFACE_INCLUDE_DIRECTORIES -I)
+endmacro()
+
+macro(zephyr_get_system_include_directories i)
+  get_property_and_add_prefix(${i} zephyr_interface INTERFACE_SYSTEM_INCLUDE_DIRECTORIES -isystem)
+endmacro()
+
+macro(zephyr_get_compile_definitions i)
+  get_property_and_add_prefix(${i} zephyr_interface INTERFACE_COMPILE_DEFINITIONS -D)
+endmacro()
+
+macro(zephyr_get_compile_options i)
+  get_property(${i} TARGET zephyr_interface PROPERTY INTERFACE_COMPILE_OPTIONS)
+endmacro()
+
+macro(zephyr_get_include_directories_as_string i)
+  zephyr_get_include_directories(${i})
+
+  string(REPLACE ";"  " "   ${i} ${${i}})
+  string(REPLACE "-I" " -I" ${i} ${${i}})
+endmacro()
+
+macro(zephyr_get_system_include_directories_as_string i)
+  get_property_and_add_prefix(${i} zephyr_interface INTERFACE_SYSTEM_INCLUDE_DIRECTORIES -isystem)
+
+  string(REPLACE ";"  " "               ${i} ${${i}})
+  string(REPLACE "-isystem" " -isystem" ${i} ${${i}})
+endmacro()
+
+macro(zephyr_get_compile_definitions_as_string i)
+  get_property_and_add_prefix(${i} zephyr_interface INTERFACE_COMPILE_DEFINITIONS -D)
+
+  string(REPLACE ";"  " "   ${i} ${${i}})
+  string(REPLACE "-D" " -D" ${i} ${${i}})
+endmacro()
+
+macro(zephyr_get_compile_options_as_string i)
+  zephyr_get_compile_options(j)
+
+  foreach(__opt__ ${j})
+    if(__opt__ MATCHES "<COMPILE_LANGUAGE:")
+      # TODO: Support COMPILE_LANGUAGE generator expressions
+      continue()
+    endif()
+    set(${i} "${${i}} ${__opt__}")
   endforeach()
 endmacro()
 
@@ -310,7 +239,7 @@ function(generate_inc_file_for_target
   add_dependencies(${target} ${generated_target_name})
 endfunction()
 
-# 1.2 zephyr_library_*
+# 2.1 zephyr_library_*
 #
 # Zephyr libraries use CMake's library concept and a set of
 # assumptions about how zephyr code is organized to cut down on
@@ -331,11 +260,6 @@ endfunction()
 # The methods modify the CMake target_* API to reduce boilerplate;
 #  PRIVATE is assumed
 #  The target is assumed to be ZEPHYR_CURRENT_LIBRARY
-#
-# When a flag that is given through the zephyr_* API conflicts with
-# the zephyr_library_* API then precedence will be given to the
-# zephyr_library_* API. In other words, local configuration overrides
-# global configuration.
 
 # Constructor with a directory-inferred name
 macro(zephyr_library)
@@ -395,34 +319,12 @@ function(zephyr_library_compile_definitions item)
 endfunction()
 
 function(zephyr_library_compile_options item)
-  # The compiler is relied upon for sane behaviour when flags are in
-  # conflict. Compilers generally give precedence to flags given late
-  # on the command line. So to ensure that zephyr_library_* flags are
-  # placed late on the command line we create a dummy interface
-  # library and link with it to obtain the flags.
-  #
-  # Linking with a dummy interface library will place flags later on
-  # the command line than the the flags from zephyr_interface because
-  # zephyr_interface will be the first interface library that flags
-  # are taken from.
-
-  string(RANDOM random)
-  set(lib_name options_interface_lib_${random})
-
-  add_library(           ${lib_name} INTERFACE)
-  target_compile_options(${lib_name} INTERFACE ${item} ${ARGN})
-
-  target_link_libraries(${ZEPHYR_CURRENT_LIBRARY} ${lib_name})
+  target_compile_options(${ZEPHYR_CURRENT_LIBRARY} PRIVATE ${item} ${ARGN})
 endfunction()
 
 function(zephyr_library_cc_option)
-  foreach(option ${ARGV})
-    string(MAKE_C_IDENTIFIER check${option} check)
-    check_c_compiler_flag(${option} ${check})
-
-    if(${check})
-      zephyr_library_compile_options(${option})
-    endif()
+  foreach(arg ${ARGV})
+     target_cc_option(${ZEPHYR_CURRENT_LIBRARY} PRIVATE ${arg})
   endforeach()
 endfunction()
 
@@ -670,11 +572,6 @@ function(zephyr_library_link_libraries_ifdef feature_toggle item)
   endif()
 endfunction()
 
-macro(list_append_ifdef feature_toggle list)
-  if(${${feature_toggle}})
-    list(APPEND ${list} ${ARGN})
-  endif()
-endmacro()
 
 # 3.2. *_ifndef
 # See 3.1 *_ifdef
@@ -708,67 +605,22 @@ endfunction()
 # compiler lacks support. *_cc_option was ported from KBuild, see
 # cc-option in
 # https://www.kernel.org/doc/Documentation/kbuild/makefiles.txt
-
-# Writes 1 to the output variable 'ok' for the language 'lang' if
-# the flag is supported, otherwise writes 0.
 #
-# lang must be C or CXX
-#
-# TODO: Support ASM
-#
-# Usage:
-#
-# check_compiler_flag(C "-Wall" my_check)
-# print(my_check) # my_check is now 1
-function(check_compiler_flag lang option ok)
-  string(MAKE_C_IDENTIFIER check${option}_${lang} ${ok})
-
-  if(${lang} STREQUAL C)
-    check_c_compiler_flag(${option} ${${ok}})
-  else()
-    check_cxx_compiler_flag(${option} ${${ok}})
-  endif()
-
-  if(${${${ok}}})
-    set(ret 1)
-  else()
-    set(ret 0)
-  endif()
-
-  set(${ok} ${ret} PARENT_SCOPE)
-endfunction()
-
 function(target_cc_option target scope option)
-  target_cc_option_fallback(${target} ${scope} ${option} "")
+  string(MAKE_C_IDENTIFIER check${option} check)
+  check_c_compiler_flag(${option} ${check})
+  target_compile_option_ifdef(${check} ${target} ${scope} ${option})
 endfunction()
 
-# Support an optional second option for when the first option is not
-# supported.
+# Support an optional second option for when the first option is
+# not supported.
 function(target_cc_option_fallback target scope option1 option2)
-  if(CONFIG_CPLUSPLUS)
-    foreach(lang C CXX)
-      # For now, we assume that all flags that apply to C/CXX also
-      # apply to ASM.
-      check_compiler_flag(${lang} ${option1} check)
-      if(${check})
-        target_compile_options(${target} ${scope}
-          $<$<COMPILE_LANGUAGE:${lang}>:${option1}>
-          $<$<COMPILE_LANGUAGE:ASM>:${option1}>
-          )
-      elseif(option2)
-        target_compile_options(${target} ${scope}
-          $<$<COMPILE_LANGUAGE:${lang}>:${option2}>
-          $<$<COMPILE_LANGUAGE:ASM>:${option2}>
-          )
-      endif()
-    endforeach()
+  string(MAKE_C_IDENTIFIER check${option1} check)
+  check_c_compiler_flag(${option1} ${check})
+  if(${check})
+    target_compile_options(${target} ${scope} ${option1})
   else()
-    check_compiler_flag(C ${option1} check)
-    if(${check})
-      target_compile_options(${target} ${scope} ${option1})
-    elseif(option2)
-      target_compile_options(${target} ${scope} ${option2})
-    endif()
+    target_compile_options(${target} ${scope} ${option2})
   endif()
 endfunction()
 
